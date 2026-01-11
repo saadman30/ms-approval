@@ -1,0 +1,539 @@
+Enterprise-Grade Microservices Learning Project
+
+Project Overview
+
+Product Type: Multi-tenant B2B SaaS – Subscription-based Workflow Platform
+Learning Goal: Experience real-world microservices problems, trade-offs, and practices at enterprise scale.
+Non-goal: Feature richness, UI polish, or speed of delivery.
+
+This document defines feature requirements, service ownership, and design intent. It is written as a reference artifact you would expect in a serious architecture initiative.
+
+⸻
+
+Global System Constraints (Read First)
+
+These constraints apply to every feature:
+	1.	Each service owns its data exclusively
+	2.	No shared databases
+	3.	Cross-service communication defaults to async events
+	4.	Synchronous calls are allowed only for:
+	•	Authentication
+	•	User-facing read paths
+	5.	Eventual consistency is acceptable and expected
+	6.	Services must degrade gracefully when dependencies fail
+
+⸻
+
+Service Landscape (Fixed)
+	1.	Identity Service
+	2.	Organization Service
+	3.	Workflow Service
+	4.	Subscription & Billing Service
+	5.	Notification Service
+	6.	Audit Service
+	7.	Analytics Service
+
+⸻
+
+1. Identity Service
+
+Business Responsibility
+
+Manage user identity and authentication independently of organizations and products.
+
+Core Features
+	•	User registration
+	•	Login / logout
+	•	Token issuance (access + refresh)
+	•	Password reset
+	•	MFA (optional but recommended)
+
+Data Owned
+	•	User
+	•	Credential
+	•	Authentication session
+
+Exposed Capabilities
+	•	Authenticate user
+	•	Issue tokens
+	•	Validate token
+
+Explicit Non-Responsibilities
+	•	Organization membership
+	•	Roles
+	•	Permissions
+
+Failure Scenarios to Design For
+	•	Token validation service unavailable
+	•	Token version mismatch during rolling deploy
+
+⸻
+
+2. Organization Service
+
+Business Responsibility
+
+Model companies (tenants) and user membership within them.
+
+Core Features
+	•	Create organization
+	•	Invite user to organization
+	•	Accept / reject invitation
+	•	Assign role within organization
+	•	Remove user from organization
+	•	Delete organization (triggers saga)
+
+Data Owned
+	•	Organization
+	•	Membership
+	•	Role assignments
+
+Key Events Emitted
+	•	OrganizationCreated
+	•	OrganizationDeleted
+	•	MemberAdded
+	•	MemberRemoved
+	•	RoleChanged
+
+Failure Scenarios
+	•	User exists but org membership not yet propagated
+	•	Org deleted while dependent services still processing
+
+⸻
+
+3. Workflow Service
+
+Business Responsibility
+
+Own and manage work artifacts (projects, tasks, workflows).
+
+Core Features
+	•	Create project
+	•	Create task
+	•	Update task
+	•	Change task status
+	•	Assign task
+	•	Archive project
+
+Constraints
+	•	Enforce plan limits locally
+	•	Never call Billing synchronously
+
+Data Owned
+	•	Project
+	•	Task
+	•	Workflow state
+
+External Dependencies
+	•	Cached entitlements from Billing events
+	•	Cached membership data from Org events
+
+Failure Scenarios
+	•	Entitlement data stale
+	•	Member removed but cache not yet updated
+
+⸻
+
+4. Subscription & Billing Service
+
+Business Responsibility
+
+Monetization, plans, entitlements, and usage limits.
+
+Core Features
+	•	Create subscription
+	•	Upgrade / downgrade plan
+	•	Cancel subscription
+	•	Define plan entitlements
+	•	Track usage
+
+Data Owned
+	•	Subscription
+	•	Plan
+	•	Entitlement
+	•	Usage counters
+
+Key Events
+	•	SubscriptionActivated
+	•	SubscriptionChanged
+	•	EntitlementsUpdated
+	•	SubscriptionCancelled
+
+Hard Rules
+	•	Source of truth for feature access
+	•	No synchronous enforcement calls
+
+⸻
+
+5. Notification Service
+
+Business Responsibility
+
+Deliver user-facing notifications via multiple channels.
+
+Core Features
+	•	Send email notifications
+	•	Send in-app notifications
+	•	Send webhook notifications
+
+Input Model
+	•	Consumes events only
+
+Key Requirements
+	•	At-least-once delivery
+	•	Idempotent processing
+	•	Retry with backoff
+
+Failure Scenarios
+	•	Duplicate events
+	•	Poison messages
+
+⸻
+
+6. Audit Service
+
+Business Responsibility
+
+Maintain immutable audit logs for compliance and traceability.
+
+Core Features
+	•	Record security events
+	•	Record business-critical actions
+	•	Support compliance queries
+
+Data Characteristics
+	•	Append-only
+	•	Immutable
+	•	Write-heavy
+
+Events Consumed
+	•	User actions
+	•	Permission changes
+	•	Data mutations
+
+Special Constraints
+	•	No deletes
+	•	No updates
+
+⸻
+
+7. Analytics Service
+
+Business Responsibility
+
+Provide aggregated, read-optimized insights.
+
+Core Features
+	•	Usage dashboards
+	•	Task throughput metrics
+	•	Subscription analytics
+
+Data Model
+	•	Derived only
+	•	Event-sourced
+	•	Eventually consistent
+
+Key Design Lesson
+
+CQRS separation between operational and analytical workloads.
+
+⸻
+
+Cross-Cutting Feature Scenarios (Mandatory)
+
+Scenario 1: Organization Deletion (Saga)
+
+Steps:
+	1.	Org deletion requested
+	2.	Org service emits OrganizationDeletionRequested
+	3.	Workflow archives projects
+	4.	Billing cancels subscription
+	5.	Audit logs final state
+	6.	Org deletion confirmed
+
+Must handle:
+	•	Partial failure
+	•	Retry
+	•	Compensation
+
+⸻
+
+Scenario 2: Plan Downgrade
+
+Constraints:
+	•	Existing tasks may exceed new limits
+	•	New task creation must be blocked
+
+Learning Focus:
+	•	Graceful degradation
+	•	Business-driven consistency
+
+⸻
+
+Scenario 3: Permission Change Propagation
+
+Challenges:
+	•	Cached permissions
+	•	Event delay
+	•	Security vs availability
+
+⸻
+
+Non-Functional Requirements
+
+Scalability
+	•	Horizontal scaling per service
+	•	Independent scaling profiles
+
+Reliability
+	•	Circuit breakers
+	•	Timeouts
+	•	Retries
+
+Observability
+	•	Correlation IDs
+	•	Structured logs
+	•	Distributed tracing
+
+Security
+	•	Tenant isolation
+	•	RBAC enforcement
+	•	Least privilege
+
+⸻
+
+Required Artifacts (You Must Produce)
+	•	Capability map
+	•	Service responsibility documents
+	•	Event schema definitions
+	•	Failure-mode analysis per feature
+	•	Sequence diagrams
+	•	Data ownership matrix
+	•	Deployment & rollback strategy
+
+⸻
+
+# Cursor Rules — Enterprise Microservices Learning Project
+# Purpose: Enforce enterprise-grade microservice boundaries, tech stack, and practices
+# Audience: AI pair-programming (Cursor) + human developer
+
+## GLOBAL INTENT
+You are building an enterprise-grade, event-driven microservices system for learning purposes.
+Optimize for architectural correctness, failure handling, observability, and clear service boundaries — not speed or simplicity.
+
+---
+
+## NON-NEGOTIABLE ARCHITECTURAL RULES
+
+1. One service = one business capability
+2. One service = one ExpressJS app
+3. One service = one database (no sharing)
+4. No service may read another service's database
+5. Cross-service communication defaults to async events
+6. Eventual consistency is expected and acceptable
+7. Design for failure first, success second
+
+If a design violates these rules, stop and redesign.
+
+---
+
+## PROJECT DOMAIN
+Multi-tenant B2B SaaS: Subscription-based Workflow Platform
+
+Core business capabilities:
+- Identity
+- Organization & Membership
+- Workflow / Tasks
+- Subscription & Billing
+- Notifications
+- Audit
+- Analytics
+
+---
+
+## SERVICE DEFINITIONS (FIXED)
+
+### identity-service
+- Responsibility: Authentication, token issuance, MFA
+- Owns: users, credentials, sessions
+- Must NOT manage org roles or permissions
+
+### organization-service
+- Responsibility: Tenants, membership, RBAC
+- Owns: organizations, memberships, roles
+
+### workflow-service
+- Responsibility: Projects, tasks, workflows
+- Enforces plan limits locally using cached entitlements
+- Must NOT synchronously call billing-service
+
+### billing-service
+- Responsibility: Plans, subscriptions, entitlements, usage
+- Source of truth for feature access
+
+### notification-service
+- Responsibility: Email, in-app, webhook delivery
+- Consumes events only
+
+### audit-service
+- Responsibility: Immutable compliance logs
+- Append-only storage
+
+### analytics-service
+- Responsibility: Read-optimized reporting
+- Event-sourced, eventually consistent
+
+---
+
+## TECHNOLOGY STACK (MANDATORY)
+
+### Runtime & Language
+- Node.js
+- ExpressJS
+- TypeScript (strict mode enabled)
+
+### Databases (Isolated per service)
+- PostgreSQL: identity, organization, workflow, billing
+- Redis: notification
+- PostgreSQL (append-only) or ClickHouse: audit
+- ClickHouse or Postgres read model: analytics
+
+### Messaging & Events
+- Apache Kafka or Redpanda (Kafka-compatible)
+- At-least-once delivery semantics
+- Consumer groups required
+- Dead-letter queues required
+
+### API Gateway
+- NGINX or Traefik
+- Responsibilities:
+  - Token validation
+  - Rate limiting
+  - Correlation ID injection
+
+---
+
+## OBSERVABILITY (MUST BE IMPLEMENTED FROM DAY ONE)
+
+### Logging
+- Structured JSON logs only
+- Pino or Winston
+- Centralized via Loki
+
+### Metrics
+- Prometheus
+- Required metrics:
+  - Request latency
+  - Error rate
+  - Kafka consumer lag
+  - DB connection saturation
+
+### Tracing
+- OpenTelemetry
+- Jaeger
+- Every request/event must propagate a traceId
+
+You must be able to trace a single user action across multiple services.
+
+---
+
+## EVENT DESIGN RULES
+
+1. Events are immutable
+2. Events are versioned (v1, v2, ...)
+3. Backward compatibility is mandatory
+4. Consumers must be idempotent
+5. Events represent facts, not commands
+
+Example:
+- GOOD: OrganizationDeleted
+- BAD: DeleteOrganization
+
+---
+
+## FAILURE ENGINEERING REQUIREMENTS
+
+Every service must implement:
+- Timeouts on all external calls
+- Circuit breakers
+- Retries with exponential backoff + jitter
+- Graceful degradation paths
+
+You must intentionally test:
+- Service downtime
+- Event duplication
+- Event delays
+- Partial failures
+
+---
+
+## SECURITY & MULTI-TENANCY
+
+- Authentication via JWT (short-lived access tokens)
+- Authorization via RBAC (org-scoped)
+- Tenant isolation enforced at data and query level
+- Audit all security-sensitive actions
+
+Auth ≠ Authorization. Treat them separately.
+
+---
+
+## DOCKER & LOCAL DEVELOPMENT
+
+### Docker Rules
+- Every service has its own Dockerfile
+- No multi-service containers
+- No shared volumes for databases
+
+### docker-compose requirements
+- All services runnable via docker-compose
+- Kafka + Zookeeper (or Redpanda)
+- PostgreSQL per service
+- Prometheus, Loki, Jaeger included
+
+Local environment must simulate production topology.
+
+---
+
+## KUBERNETES (PHASED REQUIREMENT)
+
+- Each service deployable independently
+- Readiness & liveness probes required
+- Resource limits defined
+- Rolling deployments supported
+
+---
+
+## FORBIDDEN SHORTCUTS
+
+- No shared ORM packages
+- No synchronous service-to-service enforcement calls
+- No global config files shared across services
+- No "temporary" shared databases
+
+If tempted, stop and redesign.
+
+---
+
+## REQUIRED DESIGN ARTIFACTS (BEFORE CODING)
+
+- Capability map
+- Service responsibility docs
+- Event schemas
+- Data ownership matrix
+- Failure-mode analysis
+- Sequence diagrams
+
+Code without these artifacts is considered incomplete.
+
+---
+
+## SUCCESS CRITERIA
+
+This system is successful if:
+- Partial outages are survivable
+- Debugging requires traces, not guesswork
+- Services can evolve independently
+- Trade-offs are explicit and documented
+
+If the system feels easy, it is wrong.
