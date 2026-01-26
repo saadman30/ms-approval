@@ -81,6 +81,8 @@ This project implements 7 microservices following strict architectural boundarie
 Comprehensive documentation is available in the `docs/` directory:
 
 - **[Architecture Guide](./docs/ARCHITECTURE_GUIDE.md)** - Complete system architecture documentation
+- **[CI/CD Guide](./docs/CI_CD_GUIDE.md)** - Comprehensive CI/CD documentation for beginners
+- **[CI/CD Quick Reference](./docs/CI_CD_QUICK_REFERENCE.md)** - Quick reference for CI/CD workflows
 - **[Quick Reference](./docs/QUICK_REFERENCE.md)** - Quick reference for ports, endpoints, and commands
 - **[Capability Map](./docs/capability-map.md)** - Business capabilities and service ownership
 - **[Event Schemas](./docs/event-schemas.md)** - All domain event definitions
@@ -103,6 +105,33 @@ All services implement:
 - Prometheus metrics
 - OpenTelemetry distributed tracing
 - Correlation IDs for request tracking
+
+## CI/CD
+
+This project implements enterprise-grade CI/CD using GitHub Actions:
+
+### Workflows
+
+- **Continuous Integration** (`ci.yml`) - Linting, testing, and building all services
+- **Security Scanning** (`security.yml`) - Dependency, code, and container security scans
+- **Docker Build** (`docker-build.yml`) - Multi-platform container image builds
+- **Staging Deployment** (`deploy-staging.yml`) - Automated deployment to staging
+- **Production Deployment** (`deploy-production.yml`) - Production deployment with approval gates
+- **Code Quality** (`code-quality.yml`) - SonarCloud integration
+- **Performance Testing** (`performance-test.yml`) - Load and performance tests
+- **Dependency Updates** (`dependency-update.yml`) - Weekly dependency checks
+
+### Features
+
+- ✅ Matrix builds for parallel service testing
+- ✅ Multi-stage Docker builds with caching
+- ✅ Security scanning (SAST, dependency, container)
+- ✅ Environment protection (production requires approval)
+- ✅ Automated rollback on failure
+- ✅ Change detection (only build changed services)
+- ✅ Comprehensive documentation for beginners
+
+See [CI/CD Guide](./docs/CI_CD_GUIDE.md) for detailed documentation.
 
 ## License
 

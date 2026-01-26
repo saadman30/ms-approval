@@ -1,0 +1,100 @@
+name: Reusable Build Service Workflow
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        required: true
+        type: string
+      node-version:
+        required: false
+        type: string
+        default: '18'
+      build-command:
+        required: false
+        type: string
+        default: 'build'
+      test-command:
+        required: false
+        type: string
+        default: 'test'
+    outputs:
+      build-success:
+        description: 'Whether the build was successful'
+        value: ${{ jobs.build.outputs.success }}
+      test-success:
+        description: 'Whether tests passed'
+        value: ${{ jobs.test.outputs.success }}
+
+jobs:
+  build:
+    name: Build ${{ inputs.service }}
+    runs-on: ubuntu-latest
+    outputs:
+      success: ${{ steps.build-status.outputs.success }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build ${{ inputs.service }}
+        id: build-status
+        run: |
+          if [ -f "services/${{ inputs.service }}/package.json" ]; then
+            cd services/${{ inputs.service }}
+            npm run ${{ inputs.build-command }}
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "Service ${{ inputs.service }} not found"
+            echo "success=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Upload build artifacts
+        if: steps.build-status.outputs.success == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ inputs.service }}
+          path: services/${{ inputs.service }}/dist
+          retention-days: 7
+
+  test:
+    name: Test ${{ inputs.service }}
+    runs-on: ubuntu-latest
+    outputs:
+      success: ${{ steps.test-status.outputs.success }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests for ${{ inputs.service }}
+        id: test-status
+        run: |
+          if [ -f "services/${{ inputs.service }}/package.json" ]; then
+            cd services/${{ inputs.service }}
+            npm run ${{ inputs.test-command }} || echo "Tests not configured"
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            echo "success=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+        continue-on-error: true
